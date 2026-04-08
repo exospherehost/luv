@@ -29,5 +29,8 @@ Homepage = "https://github.com/exospherehost/luv"
 Repository = "https://github.com/exospherehost/luv"
 Issues = "https://github.com/exospherehost/luv/issues"
 
+[tool.hatch.build.targets.wheel]
+packages = ["luv"]
+
 [project.scripts]
 luv = "luv:main"
