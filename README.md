@@ -19,8 +19,14 @@ pip install luv
 ## Quick start
 
 ```bash
+# Configure your default GitHub org (one-time setup)
+luv --init
+
 # Create a new workspace and launch Claude
 luv my-repo "add user authentication"
+
+# Use a different org inline
+luv other-org/my-repo "fix the bug"
 
 # Reopen workspace #42
 luv my-repo 42
@@ -51,10 +57,11 @@ All workspaces live under `~/prs/`. The number comes from the repo's GitHub issu
 
 | Command | Description |
 |---------|-------------|
-| `luv <repo> [prompt...]` | Create a new workspace and launch Claude |
-| `luv <repo> <number> [prompt]` | Reopen an existing workspace |
+| `luv --init` | Configure default GitHub org |
+| `luv [org/]<repo> [prompt...]` | Create a new workspace and launch Claude |
+| `luv [org/]<repo> <number> [prompt]` | Reopen an existing workspace |
 | `luv -l <PR URL> [prompt]` | Open any GitHub PR by URL |
-| `luv <repo> -pr <number> [prompt]` | Open a PR by repo + number |
+| `luv [org/]<repo> -pr <number> [prompt]` | Open a PR by repo + number |
 | `luv --clean` | Delete workspaces where the branch is fully pushed/merged |
 | `luv --clean -f` | Force delete all workspaces |
 
@@ -128,7 +135,9 @@ Use `luv --clean -f` to skip all safety checks and delete everything.
 
 ## Configuration
 
-`luv` is configured for the [exospherehost](https://github.com/exospherehost) GitHub org by default. To use a different org, set the `ORG` constant in the source.
+Run `luv --init` to set your default GitHub org. This saves to `~/.luv/config.json`.
+
+You can also pass `org/repo` inline to override the default for any command (e.g., `luv other-org/my-repo`).
 
 ## License
 

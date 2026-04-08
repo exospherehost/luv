@@ -7,7 +7,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-ORG = "exospherehost"
+LUV_DIR = Path.home() / ".luv"
+CONFIG_FILE = LUV_DIR / "config.json"
 PRS_DIR = Path.home() / "prs"
 CLAUDE_JSON = Path.home() / ".claude.json"
 
@@ -33,6 +34,54 @@ def die(msg: str) -> None:
 
 def run(cmd: list[str], *, cwd: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+
+
+def load_config() -> dict:
+    """Read ~/.luv/config.json, or return {} on missing/corrupt."""
+    if not CONFIG_FILE.exists():
+        return {}
+    try:
+        return json.loads(CONFIG_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_config(data: dict) -> None:
+    """Atomic-write config JSON to ~/.luv/config.json."""
+    LUV_DIR.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=str(LUV_DIR), delete=False,
+    ) as tmp:
+        json.dump(data, tmp, indent=2)
+        tmp.write("\n")
+        tmp_path = Path(tmp.name)
+    os.replace(tmp_path, CONFIG_FILE)
+
+
+def parse_github_remote(cwd: str) -> tuple[str, str] | None:
+    """Extract (org, repo) from origin remote URL. Returns None on failure."""
+    r = run(["git", "remote", "get-url", "origin"], cwd=cwd)
+    if r.returncode != 0:
+        return None
+    url = r.stdout.strip()
+    m = re.match(r"https://github\.com/([^/]+)/([^/.]+)", url)
+    if not m:
+        m = re.match(r"git@github\.com:([^/]+)/([^/.]+)", url)
+    if m:
+        return m.group(1), m.group(2)
+    return None
+
+
+def resolve_org(explicit: str | None = None) -> str:
+    """Resolve GitHub org: explicit arg > config file > error."""
+    if explicit:
+        return explicit
+    cfg = load_config()
+    org = cfg.get("org")
+    if org:
+        return org
+    die("no default org configured.\nRun 'luv --init' to set one, or use 'org/repo' syntax.")
+    return ""  # unreachable, keeps type checkers happy
 
 
 def trust_project(path: Path) -> None:
@@ -78,6 +127,50 @@ def ensure_pr_rules() -> None:
     if "# Pull Request Management" not in existing:
         with claude_md.open("a") as f:
             f.write(PR_RULES)
+
+
+def cmd_init() -> None:
+    """Interactive setup: choose a default GitHub org."""
+    if not sys.stdin.isatty():
+        die("--init requires an interactive terminal")
+
+    r = run(["gh", "api", "user", "--jq", ".login"])
+    if r.returncode != 0:
+        die("'gh' not found or not authenticated. Run 'gh auth login' first.")
+    username = r.stdout.strip()
+
+    r = run(["gh", "api", "user/orgs", "--jq", ".[].login"])
+    orgs = [line for line in r.stdout.strip().splitlines() if line] if r.returncode == 0 else []
+
+    choices = [f"{username} (personal)"] + orgs
+    print("luv: select default GitHub owner:")
+    for i, name in enumerate(choices, 1):
+        print(f"  {i}) {name}")
+    other_idx = len(choices) + 1
+    print(f"  {other_idx}) other (type manually)")
+
+    raw = input(f"Choice [1]: ").strip()
+    if not raw:
+        idx = 1
+    else:
+        try:
+            idx = int(raw)
+        except ValueError:
+            die(f"invalid choice: '{raw}'")
+
+    if idx == other_idx:
+        selected = input("GitHub org or username: ").strip()
+        if not selected:
+            die("no org entered")
+    elif 1 <= idx <= len(choices):
+        selected = choices[idx - 1].split(" (")[0]  # strip " (personal)" suffix
+    else:
+        die(f"invalid choice: {idx}")
+
+    config = load_config()
+    config["org"] = selected
+    save_config(config)
+    print(f"luv: default org set to '{selected}'. Saved to ~/.luv/config.json")
 
 
 def load_luv_settings(clone_dir: Path) -> dict | None:
@@ -257,9 +350,13 @@ def cmd_clean(force: bool = False) -> None:
         fetch_ok = run(["git", "fetch", "origin", branch], cwd=cwd).returncode == 0
 
         if not fetch_ok:
-            repo_name = parts[0]
-            r = run(["gh", "api", f"repos/{ORG}/{repo_name}/pulls",
-                     "-f", "state=closed", "-f", f"head={ORG}:{branch}",
+            remote_info = parse_github_remote(cwd)
+            if remote_info is None:
+                skipped.append((entry.name, "cannot determine org from git remote"))
+                continue
+            remote_org, repo_name = remote_info
+            r = run(["gh", "api", f"repos/{remote_org}/{repo_name}/pulls",
+                     "-f", "state=closed", "-f", f"head={remote_org}:{branch}",
                      "-f", "per_page=5"])
             if r.returncode != 0:
                 skipped.append((entry.name, "branch not on remote"))
@@ -301,7 +398,7 @@ def cmd_clean(force: bool = False) -> None:
         print("luv: nothing to clean")
 
 
-def open_existing(repo: str, number: int, prompt: str | None, nav_mode: bool = False, resume_mode: bool = False) -> None:
+def open_existing(org: str, repo: str, number: int, prompt: str | None, nav_mode: bool = False, resume_mode: bool = False) -> None:
     """Open an existing work folder or remote branch by number."""
     clone_dir = PRS_DIR / f"{repo}-{number}"
 
@@ -319,7 +416,7 @@ def open_existing(repo: str, number: int, prompt: str | None, nav_mode: bool = F
 
     # 2. Check remote branch luv-{number}
     branch = f"luv-{number}"
-    clone_url = f"https://github.com/{ORG}/{repo}"
+    clone_url = f"https://github.com/{org}/{repo}"
     r = run(["git", "ls-remote", "--heads", clone_url, branch])
     if branch not in r.stdout:
         die(f"no local folder '{repo}-{number}' and no remote branch '{branch}'")
@@ -404,11 +501,16 @@ Flags:
   -f, --force   (with --clean) skip safety checks and delete all work folders
 
 Commands:
-  luv <repo> [prompt...]          create a new PR workspace for <repo>
-  luv <repo> <number> [prompt]    reopen an existing work folder by number
-  luv -l <PR URL> [prompt]        open any GitHub PR by URL (any org)
-  luv <repo> -pr <number> [prompt] open a GitHub PR by repo + number
-  luv --clean [-f]                delete fully-pushed work folders
+  luv --init                              configure default GitHub org
+  luv [org/]<repo> [prompt...]            create a new PR workspace
+  luv [org/]<repo> <number> [prompt]      reopen an existing work folder by number
+  luv -l <PR URL> [prompt]                open any GitHub PR by URL
+  luv [org/]<repo> -pr <number> [prompt]  open a GitHub PR by repo + number
+  luv --clean [-f]                        delete fully-pushed work folders
+
+Org resolution:
+  Explicit org/repo overrides the default. Run 'luv --init' to set a default.
+  Config: ~/.luv/config.json
 
 Docker:
   If the repo contains .luv/settings.json with a "compose_file" key,
@@ -418,6 +520,10 @@ Docker:
 
     if args[0] == "--clean":
         cmd_clean(force=force)
+        return
+
+    if args[0] == "--init":
+        cmd_init()
         return
 
     # luv -l <PR URL>
@@ -433,11 +539,13 @@ Docker:
         open_pr(org, repo, number, prompt, nav_mode, resume_mode)
         return
 
-    repo = args[0].rstrip("/")
-    if "/" in repo:
-        die("pass only the repo name, not owner/repo")
+    raw = args[0].rstrip("/")
+    if "/" in raw:
+        explicit_org, repo = raw.split("/", 1)
+    else:
+        explicit_org, repo = None, raw
 
-    # luv <repo> -pr <number>
+    # luv [org/]<repo> -pr <number>
     if "-pr" in args:
         idx = args.index("-pr")
         if idx + 1 >= len(args):
@@ -448,26 +556,27 @@ Docker:
             die(f"expected a PR number after -pr, got '{args[idx + 1]}'")
         prompt_parts = [a for i, a in enumerate(args) if i not in (0, idx, idx + 1)]
         prompt = " ".join(prompt_parts) or None
-        open_pr(ORG, repo, number, prompt, nav_mode, resume_mode)
+        open_pr(resolve_org(explicit_org), repo, number, prompt, nav_mode, resume_mode)
         return
 
     # Detect optional numeric second argument
     if len(args) > 1 and args[1].isdigit():
         number = int(args[1])
         prompt = " ".join(args[2:]) or None
-        open_existing(repo, number, prompt, nav_mode, resume_mode)
+        open_existing(resolve_org(explicit_org), repo, number, prompt, nav_mode, resume_mode)
         return
 
+    org = resolve_org(explicit_org)
     prompt = " ".join(args[1:]) if len(args) > 1 else None
 
     # 1. Verify repo exists
-    r = run(["gh", "api", f"repos/{ORG}/{repo}"])
+    r = run(["gh", "api", f"repos/{org}/{repo}"])
     if r.returncode != 0:
-        die(f"repo '{ORG}/{repo}' not found or gh auth failed.\n{r.stderr.strip()}")
+        die(f"repo '{org}/{repo}' not found or gh auth failed.\n{r.stderr.strip()}")
 
     # 2. Get latest issue/PR number (shared counter on GitHub)
     r = run(["gh", "api",
-             f"repos/{ORG}/{repo}/issues?state=all&per_page=1&sort=created&direction=desc"])
+             f"repos/{org}/{repo}/issues?state=all&per_page=1&sort=created&direction=desc"])
     if r.returncode != 0:
         die(f"failed to fetch issues.\n{r.stderr.strip()}")
     items = json.loads(r.stdout)
@@ -481,7 +590,7 @@ Docker:
     clone_dir = PRS_DIR / f"{repo}-{candidate}"
 
     # 4. Clone
-    clone_url = f"https://github.com/{ORG}/{repo}"
+    clone_url = f"https://github.com/{org}/{repo}"
     print(f"luv: cloning {clone_url} -> {clone_dir}")
     r = subprocess.run(["git", "clone", clone_url, str(clone_dir)])
     if r.returncode != 0:
