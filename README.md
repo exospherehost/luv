@@ -8,10 +8,10 @@ A CLI that launches [Claude Code](https://docs.anthropic.com/en/docs/claude-code
 
 ```bash
 # With uv (recommended)
-uv tool install luv
+uv tool install luv-cli
 
 # With pip
-pip install luv
+pip install luv-cli
 ```
 
 **Requirements:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI and [GitHub CLI](https://cli.github.com/) (`gh`) must be installed and authenticated.
