@@ -398,6 +398,23 @@ def cmd_clean(force: bool = False) -> None:
         print("luv: nothing to clean")
 
 
+def find_latest_clone(repo: str) -> Path | None:
+    """Return the highest-numbered local {repo}-{N} folder, or None."""
+    if not PRS_DIR.exists():
+        return None
+    best: Path | None = None
+    best_num = -1
+    for entry in PRS_DIR.iterdir():
+        if not entry.is_dir():
+            continue
+        parts = entry.name.rsplit("-", 1)
+        if len(parts) == 2 and parts[0] == repo and parts[1].isdigit():
+            n = int(parts[1])
+            if n > best_num:
+                best, best_num = entry, n
+    return best
+
+
 def open_existing(org: str, repo: str, number: int, prompt: str | None, nav_mode: bool = False, resume_mode: bool = False) -> None:
     """Open an existing work folder or remote branch by number."""
     clone_dir = PRS_DIR / f"{repo}-{number}"
@@ -506,6 +523,8 @@ Commands:
   luv [org/]<repo> <number> [prompt]      reopen an existing work folder by number
   luv -l <PR URL> [prompt]                open any GitHub PR by URL
   luv [org/]<repo> -pr <number> [prompt]  open a GitHub PR by repo + number
+  luv [org/]<repo> -n                     open shell in latest local clone
+  luv [org/]<repo> -r                     resume Claude in latest local clone
   luv --clean [-f]                        delete fully-pushed work folders
 
 Org resolution:
@@ -568,6 +587,18 @@ Docker:
 
     org = resolve_org(explicit_org)
     prompt = " ".join(args[1:]) if len(args) > 1 else None
+
+    # luv <repo> -n/-r  →  open latest local clone (no new workspace)
+    if (nav_mode or resume_mode) and not prompt:
+        clone_dir = find_latest_clone(repo)
+        if clone_dir is None:
+            die(f"no local clones of '{repo}' found in {PRS_DIR}")
+        print(f"luv: opening latest clone {clone_dir.name}")
+        if nav_mode:
+            navigate(clone_dir)
+        else:
+            resume(clone_dir)
+        return
 
     # 1. Verify repo exists
     r = run(["gh", "api", f"repos/{org}/{repo}"])
