@@ -71,6 +71,7 @@ All workspaces live under `~/prs/`. The number comes from the repo's GitHub issu
 |------|-------------|
 | `-n` | Navigate: open a shell instead of Claude |
 | `-r` | Resume: resume the last Claude session |
+| `-e` | Env: pass `LUV_*` environment variables (with prefix stripped) into the session |
 | `-f`, `--force` | Skip safety checks (with `--clean`) |
 
 ## Docker dev environments
