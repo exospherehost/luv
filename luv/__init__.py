@@ -11,6 +11,7 @@ LUV_DIR = Path.home() / ".luv"
 CONFIG_FILE = LUV_DIR / "config.json"
 PRS_DIR = Path.home() / "prs"
 CLAUDE_JSON = Path.home() / ".claude.json"
+CLAUDE_SETTINGS_JSON = Path.home() / ".claude" / "settings.json"
 
 PR_RULES = """
 # Pull Request Management
@@ -144,6 +145,45 @@ def ensure_pr_rules() -> None:
     if "# Pull Request Management" not in existing:
         with claude_md.open("a") as f:
             f.write(PR_RULES)
+
+
+def ensure_default_permission_mode() -> None:
+    """Set permissions.defaultMode = bypassPermissions in ~/.claude/settings.json.
+
+    Merges into existing JSON without clobbering other keys. No-op if the file
+    exists but is unreadable/invalid, or if the value is already set.
+    """
+    data: dict[str, object] = {}
+    if CLAUDE_SETTINGS_JSON.exists():
+        try:
+            with CLAUDE_SETTINGS_JSON.open("r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if not isinstance(loaded, dict):
+                return
+            data = loaded
+        except (json.JSONDecodeError, OSError):
+            return
+
+    permissions = data.get("permissions")
+    if not isinstance(permissions, dict):
+        permissions = {}
+        data["permissions"] = permissions
+
+    if permissions.get("defaultMode") == "bypassPermissions":
+        return
+    permissions["defaultMode"] = "bypassPermissions"
+
+    CLAUDE_SETTINGS_JSON.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=str(CLAUDE_SETTINGS_JSON.parent),
+        delete=False,
+    ) as tmp:
+        json.dump(data, tmp, indent=2)
+        tmp.write("\n")
+        tmp_path = Path(tmp.name)
+    os.replace(tmp_path, CLAUDE_SETTINGS_JSON)
 
 
 def cmd_init() -> None:
@@ -657,8 +697,9 @@ Docker:
     if r.returncode != 0:
         die(f"git checkout -b failed (exit {r.returncode})")
 
-    # 6. Ensure PR rules in ~/.claude/CLAUDE.md
+    # 6. Ensure PR rules in ~/.claude/CLAUDE.md and bypass-permissions default
     ensure_pr_rules()
+    ensure_default_permission_mode()
 
     print(f"luv: ready — {clone_dir.name}, branch {branch}")
 
