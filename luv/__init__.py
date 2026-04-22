@@ -281,7 +281,7 @@ def resume(clone_dir: Path, extra_env: dict[str, str] = {}) -> None:
             base = docker_compose_base(clone_dir, compose_file, project)
             r = subprocess.run(base + ["exec", "-it"] + docker_env_flags(extra_env) + ["dev-environment",
                                        "claude", "--dangerously-skip-permissions",
-                                       "--model", "claude-opus-4-6",
+                                       "--model", "claude-opus-4-7",
                                        "--effort", "max", "--resume"])
             sys.exit(r.returncode)
         finally:
@@ -292,7 +292,7 @@ def resume(clone_dir: Path, extra_env: dict[str, str] = {}) -> None:
             die("'claude' not found in PATH")
         os.environ.update(extra_env)
         os.execv(claude_bin, [claude_bin, "--dangerously-skip-permissions",
-                              "--model", "claude-opus-4-6", "--effort", "max", "--resume"])
+                              "--model", "claude-opus-4-7", "--effort", "max", "--resume"])
 
 
 def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) -> None:
@@ -309,7 +309,7 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
             base = docker_compose_base(clone_dir, compose_file, project)
             claude_cmd = ["claude", "--dangerously-skip-permissions",
                           "--permission-mode", "bypassPermissions",
-                          "--model", "claude-opus-4-6", "--effort", "max"]
+                          "--model", "claude-opus-4-7", "--effort", "max"]
             if prompt:
                 claude_cmd.append(f"/plan {prompt}")
             r = subprocess.run(base + ["exec", "-it"] + docker_env_flags(extra_env) + ["dev-environment"] + claude_cmd)
@@ -322,7 +322,7 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
             die("'claude' not found in PATH")
         base_args = [claude_bin, "--dangerously-skip-permissions",
                      "--permission-mode", "bypassPermissions",
-                     "--model", "claude-opus-4-6", "--effort", "max"]
+                     "--model", "claude-opus-4-7", "--effort", "max"]
         os.environ.update(extra_env)
         if prompt:
             os.execv(claude_bin, base_args + [f"/plan {prompt}"])
