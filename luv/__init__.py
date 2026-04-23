@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -12,6 +13,13 @@ CONFIG_FILE = LUV_DIR / "config.json"
 PRS_DIR = Path.home() / "prs"
 CLAUDE_JSON = Path.home() / ".claude.json"
 CLAUDE_SETTINGS_JSON = Path.home() / ".claude" / "settings.json"
+
+COLORS = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan", "default"]
+
+
+def pick_color() -> str:
+    """Pick a random /color value so each luv session is visually distinct."""
+    return random.choice(COLORS)
 
 PR_RULES = """
 # Pull Request Management
@@ -342,6 +350,9 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
     settings = load_luv_settings(clone_dir)
     compose_file = (settings or {}).get("compose_file")
 
+    color_cmd = f"/color {pick_color()}"
+    initial = f"{color_cmd}\n/plan {prompt}" if prompt else color_cmd
+
     if compose_file:
         project = docker_project_name(clone_dir)
         start_docker(clone_dir, compose_file, project)
@@ -349,9 +360,8 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
             base = docker_compose_base(clone_dir, compose_file, project)
             claude_cmd = ["claude", "--dangerously-skip-permissions",
                           "--permission-mode", "bypassPermissions",
-                          "--model", "claude-opus-4-7", "--effort", "max"]
-            if prompt:
-                claude_cmd.append(f"/plan {prompt}")
+                          "--model", "claude-opus-4-7", "--effort", "max",
+                          initial]
             r = subprocess.run(base + ["exec", "-it"] + docker_env_flags(extra_env) + ["dev-environment"] + claude_cmd)
             sys.exit(r.returncode)
         finally:
@@ -364,10 +374,7 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
                      "--permission-mode", "bypassPermissions",
                      "--model", "claude-opus-4-7", "--effort", "max"]
         os.environ.update(extra_env)
-        if prompt:
-            os.execv(claude_bin, base_args + [f"/plan {prompt}"])
-        else:
-            os.execv(claude_bin, base_args)
+        os.execv(claude_bin, base_args + [initial])
 
 
 def cmd_clean(force: bool = False) -> None:
