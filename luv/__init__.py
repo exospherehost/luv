@@ -330,7 +330,9 @@ def resume(clone_dir: Path, extra_env: dict[str, str] = {}) -> None:
             r = subprocess.run(base + ["exec", "-it"] + docker_env_flags(extra_env) + ["dev-environment",
                                        "claude", "--dangerously-skip-permissions",
                                        "--model", "claude-opus-4-7",
-                                       "--effort", "max", "--resume"])
+                                       "--effort", "max", "--resume",
+                                       "--remote-control",
+                                       "--remote-control-session-name-prefix", clone_dir.name])
             sys.exit(r.returncode)
         finally:
             stop_docker(clone_dir, compose_file, project)
@@ -340,7 +342,9 @@ def resume(clone_dir: Path, extra_env: dict[str, str] = {}) -> None:
             die("'claude' not found in PATH")
         os.environ.update(extra_env)
         os.execv(claude_bin, [claude_bin, "--dangerously-skip-permissions",
-                              "--model", "claude-opus-4-7", "--effort", "max", "--resume"])
+                              "--model", "claude-opus-4-7", "--effort", "max", "--resume",
+                              "--remote-control",
+                              "--remote-control-session-name-prefix", clone_dir.name])
 
 
 def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) -> None:
@@ -353,7 +357,8 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
     common_flags = ["--dangerously-skip-permissions",
                     "--model", "claude-opus-4-7",
                     "--effort", "max",
-                    "--remote-control"]
+                    "--remote-control",
+                    "--remote-control-session-name-prefix", clone_dir.name]
     if prompt:
         mode_flags = ["--permission-mode", "plan"]
         initial_args = [prompt]
