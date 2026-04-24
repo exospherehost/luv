@@ -350,20 +350,23 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
     settings = load_luv_settings(clone_dir)
     compose_file = (settings or {}).get("compose_file")
 
-    color_cmd = f"/color {pick_color()}"
-    remote_cmd = "/remote-control"
-    prefix = f"{color_cmd}\n{remote_cmd}"
-    initial = f"{prefix}\n/plan {prompt}" if prompt else prefix
+    common_flags = ["--dangerously-skip-permissions",
+                    "--model", "claude-opus-4-7",
+                    "--effort", "max",
+                    "--remote-control"]
+    if prompt:
+        mode_flags = ["--permission-mode", "plan"]
+        initial_args = [prompt]
+    else:
+        mode_flags = ["--permission-mode", "bypassPermissions"]
+        initial_args = [f"/color {pick_color()}"]
 
     if compose_file:
         project = docker_project_name(clone_dir)
         start_docker(clone_dir, compose_file, project)
         try:
             base = docker_compose_base(clone_dir, compose_file, project)
-            claude_cmd = ["claude", "--dangerously-skip-permissions",
-                          "--permission-mode", "bypassPermissions",
-                          "--model", "claude-opus-4-7", "--effort", "max",
-                          initial]
+            claude_cmd = ["claude"] + common_flags + mode_flags + initial_args
             r = subprocess.run(base + ["exec", "-it"] + docker_env_flags(extra_env) + ["dev-environment"] + claude_cmd)
             sys.exit(r.returncode)
         finally:
@@ -372,11 +375,8 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
         claude_bin = shutil.which("claude")
         if not claude_bin:
             die("'claude' not found in PATH")
-        base_args = [claude_bin, "--dangerously-skip-permissions",
-                     "--permission-mode", "bypassPermissions",
-                     "--model", "claude-opus-4-7", "--effort", "max"]
         os.environ.update(extra_env)
-        os.execv(claude_bin, base_args + [initial])
+        os.execv(claude_bin, [claude_bin] + common_flags + mode_flags + initial_args)
 
 
 def cmd_clean(force: bool = False) -> None:
