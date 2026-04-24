@@ -351,7 +351,9 @@ def launch(clone_dir: Path, prompt: str | None, extra_env: dict[str, str] = {}) 
     compose_file = (settings or {}).get("compose_file")
 
     color_cmd = f"/color {pick_color()}"
-    initial = f"{color_cmd}\n/plan {prompt}" if prompt else color_cmd
+    remote_cmd = "/remote-control"
+    prefix = f"{color_cmd}\n{remote_cmd}"
+    initial = f"{prefix}\n/plan {prompt}" if prompt else prefix
 
     if compose_file:
         project = docker_project_name(clone_dir)
