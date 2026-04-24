@@ -146,7 +146,11 @@ def docker_env_flags(env_vars: dict[str, str]) -> list[str]:
 
 
 def ensure_failproofai_installed() -> None:
-    """Install failproofai globally via npm (idempotent on re-run)."""
+    """Install failproofai globally via npm — skip if already on PATH."""
+    if shutil.which("failproofai") is not None:
+        return
+    if shutil.which("npm") is None:
+        die("'npm' not found in PATH; install Node.js to use failproofai")
     print("luv: installing failproofai globally...")
     r = subprocess.run(["npm", "install", "-g", "failproofai"])
     if r.returncode != 0:
@@ -154,13 +158,18 @@ def ensure_failproofai_installed() -> None:
 
 
 def run_failproofai_project(clone_dir: Path) -> None:
-    """Run failproofai project-scope initialization in the cloned repo."""
+    """Run failproofai project-scope initialization in the cloned repo.
+
+    On failure, remove the clone_dir so the next run re-clones and retries
+    cleanly instead of short-circuiting to a half-initialized folder.
+    """
     print(f"luv: running failproofai project setup in {clone_dir.name}...")
     r = subprocess.run(
         ["npx", "-y", "failproofai", "p", "-i", "all", "--scope", "project"],
         cwd=str(clone_dir),
     )
     if r.returncode != 0:
+        shutil.rmtree(clone_dir, ignore_errors=True)
         die("'npx -y failproofai p -i all --scope project' failed")
 
 
@@ -745,7 +754,7 @@ Docker:
 
     print(f"luv: ready — {clone_dir.name}, branch {branch}")
 
-    # 7. Launch claude, resume session, or open shell (replace this process)
+    # 8. Launch claude, resume session, or open shell (replace this process)
     if nav_mode:
         navigate(clone_dir, extra_env=extra_env)
     elif resume_mode:
