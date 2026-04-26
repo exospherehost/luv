@@ -145,34 +145,6 @@ def docker_env_flags(env_vars: dict[str, str]) -> list[str]:
     return flags
 
 
-def ensure_failproofai_installed() -> None:
-    """Install failproofai globally via npm — skip if already on PATH."""
-    if shutil.which("failproofai") is not None:
-        return
-    if shutil.which("npm") is None:
-        die("'npm' not found in PATH; install Node.js to use failproofai")
-    print("luv: installing failproofai globally...")
-    r = subprocess.run(["npm", "install", "-g", "failproofai"])
-    if r.returncode != 0:
-        die("'npm install -g failproofai' failed")
-
-
-def run_failproofai_project(clone_dir: Path) -> None:
-    """Run failproofai project-scope initialization in the cloned repo.
-
-    On failure, remove the clone_dir so the next run re-clones and retries
-    cleanly instead of short-circuiting to a half-initialized folder.
-    """
-    print(f"luv: running failproofai project setup in {clone_dir.name}...")
-    r = subprocess.run(
-        ["npx", "-y", "failproofai", "p", "-i", "all", "--scope", "project"],
-        cwd=str(clone_dir),
-    )
-    if r.returncode != 0:
-        shutil.rmtree(clone_dir, ignore_errors=True)
-        die("'npx -y failproofai p -i all --scope project' failed")
-
-
 def ensure_pr_rules() -> None:
     claude_dir = Path.home() / ".claude"
     claude_md = claude_dir / "CLAUDE.md"
@@ -550,8 +522,6 @@ def open_existing(org: str, repo: str, number: int, prompt: str | None, nav_mode
     if r.returncode != 0:
         die(f"git checkout {branch} failed (exit {r.returncode})")
 
-    run_failproofai_project(clone_dir)
-
     print(f"luv: ready — {clone_dir.name}, branch {branch}")
     ensure_pr_rules()
     if nav_mode:
@@ -593,8 +563,6 @@ def open_pr(org: str, repo: str, number: int, prompt: str | None, nav_mode: bool
     r = subprocess.run(["git", "checkout", branch], cwd=str(clone_dir))
     if r.returncode != 0:
         die(f"git checkout {branch} failed (exit {r.returncode})")
-
-    run_failproofai_project(clone_dir)
 
     print(f"luv: ready — {clone_dir.name}, branch {branch}")
     ensure_pr_rules()
@@ -653,8 +621,6 @@ Docker:
     if args[0] == "--init":
         cmd_init()
         return
-
-    ensure_failproofai_installed()
 
     # luv -l <PR URL>
     if args[0] == "-l":
@@ -745,16 +711,13 @@ Docker:
     if r.returncode != 0:
         die(f"git checkout -b failed (exit {r.returncode})")
 
-    # 6. Run failproofai project setup in the fresh clone
-    run_failproofai_project(clone_dir)
-
-    # 7. Ensure PR rules in ~/.claude/CLAUDE.md and bypass-permissions default
+    # 6. Ensure PR rules in ~/.claude/CLAUDE.md and bypass-permissions default
     ensure_pr_rules()
     ensure_default_permission_mode()
 
     print(f"luv: ready — {clone_dir.name}, branch {branch}")
 
-    # 8. Launch claude, resume session, or open shell (replace this process)
+    # 7. Launch claude, resume session, or open shell (replace this process)
     if nav_mode:
         navigate(clone_dir, extra_env=extra_env)
     elif resume_mode:
