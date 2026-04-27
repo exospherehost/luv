@@ -682,13 +682,18 @@ Docker:
     if r.returncode != 0:
         die(f"repo '{org}/{repo}' not found or gh auth failed.\n{r.stderr.strip()}")
 
-    # 2. Get latest issue/PR number (shared counter on GitHub)
-    r = run(["gh", "api",
-             f"repos/{org}/{repo}/issues?state=all&filter=all&per_page=1&sort=created&direction=desc"])
-    if r.returncode != 0:
-        die(f"failed to fetch issues.\n{r.stderr.strip()}")
-    items = json.loads(r.stdout)
-    latest = items[0]["number"] if items else 0
+    # 2. Get latest issue/PR number (shared counter on GitHub).
+    # /issues is documented to include PRs but in practice returns [] for repos
+    # with no plain issues, so query both endpoints and take the max.
+    def _latest(endpoint: str) -> int:
+        r = run(["gh", "api",
+                 f"repos/{org}/{repo}/{endpoint}?state=all&per_page=1&sort=created&direction=desc"])
+        if r.returncode != 0:
+            die(f"failed to fetch {endpoint}.\n{r.stderr.strip()}")
+        items = json.loads(r.stdout)
+        return items[0]["number"] if items else 0
+
+    latest = max(_latest("issues"), _latest("pulls"))
     candidate = latest + 1
 
     # 3. Find free local folder
