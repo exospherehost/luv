@@ -684,7 +684,7 @@ Docker:
 
     # 2. Get latest issue/PR number (shared counter on GitHub)
     r = run(["gh", "api",
-             f"repos/{org}/{repo}/issues?state=all&per_page=1&sort=created&direction=desc"])
+             f"repos/{org}/{repo}/issues?state=all&filter=all&per_page=1&sort=created&direction=desc"])
     if r.returncode != 0:
         die(f"failed to fetch issues.\n{r.stderr.strip()}")
     items = json.loads(r.stdout)
