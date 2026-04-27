@@ -71,6 +71,8 @@ All workspaces live under `~/prs/`. The number comes from the repo's GitHub issu
 |------|-------------|
 | `-n` | Navigate: open a shell instead of Claude |
 | `-r` | Resume: resume the last Claude session |
+| `-p` | Launch Claude in plan permission mode (default: `bypassPermissions`) |
+| `-nit` | Non-interactive: run `claude -p <prompt>` and exit (no REPL) |
 | `-e` | Env: pass `LUV_*` environment variables (with prefix stripped) into the session |
 | `-f`, `--force` | Skip safety checks (with `--clean`) |
 
