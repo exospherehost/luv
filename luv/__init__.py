@@ -363,7 +363,8 @@ def launch(clone_dir: Path, prompt: str | None, plan_mode: bool = False,
     if non_interactive:
         if not prompt:
             die("-nit requires a prompt")
-        mode_flags = []
+        mode_flags = ["--output-format", "stream-json",
+                      "--verbose", "--include-partial-messages"]
         initial_args = ["-p", prompt]
     elif plan_mode:
         mode_flags = ["--permission-mode", "plan"]
