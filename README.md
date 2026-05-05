@@ -64,6 +64,7 @@ All workspaces live under `~/prs/`. The number comes from the repo's GitHub issu
 | `luv [org/]<repo> -pr <number> [prompt]` | Open a PR by repo + number |
 | `luv --clean` | Delete workspaces where the branch is fully pushed/merged |
 | `luv --clean -f` | Force delete all workspaces |
+| `luv --clean --safe -f` | Force delete only workspaces older than 24h |
 
 ### Flags
 
@@ -75,6 +76,7 @@ All workspaces live under `~/prs/`. The number comes from the repo's GitHub issu
 | `-nit` | Non-interactive: run `claude -p <prompt>` and exit (no REPL); streams `stream-json` events to stdout |
 | `-e` | Env: pass `LUV_*` environment variables (with prefix stripped) into the session |
 | `-f`, `--force` | Skip safety checks (with `--clean`) |
+| `--safe` | With `--clean -f`, only delete workspaces older than 24h (mtime) |
 
 ## Docker dev environments
 
@@ -134,7 +136,7 @@ Docker mode works with all flags: `-n` opens a bash shell in the container, `-r`
 - No unpushed commits
 - If the remote branch is gone, verifies the PR was merged and local HEAD matches
 
-Use `luv --clean -f` to skip all safety checks and delete everything.
+Use `luv --clean -f` to skip all safety checks and delete everything. Add `--safe` (i.e. `luv --clean --safe -f`) to restrict force-delete to workspaces whose folder mtime is older than 24 hours, leaving recently-touched workspaces alone.
 
 ## Configuration
 

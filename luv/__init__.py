@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 LUV_DIR = Path.home() / ".luv"
@@ -391,7 +392,10 @@ def launch(clone_dir: Path, prompt: str | None, plan_mode: bool = False,
         os.execv(claude_bin, [claude_bin] + common_flags + mode_flags + initial_args)
 
 
-def cmd_clean(force: bool = False) -> None:
+SAFE_AGE_SECONDS = 24 * 3600
+
+
+def cmd_clean(force: bool = False, safe: bool = False) -> None:
     """Scan ~/prs/ and delete fully-pushed, clean work folders."""
     if not PRS_DIR.exists():
         print("luv: nothing to clean (~/prs/ does not exist)")
@@ -399,6 +403,7 @@ def cmd_clean(force: bool = False) -> None:
 
     cleaned: list[str] = []
     skipped: list[tuple[str, str]] = []
+    now = time.time()
 
     for entry in sorted(PRS_DIR.iterdir()):
         if not entry.is_dir():
@@ -409,6 +414,9 @@ def cmd_clean(force: bool = False) -> None:
             continue  # doesn't match {repo}-{number} — skip silently
 
         if force:
+            if safe and (now - entry.stat().st_mtime) < SAFE_AGE_SECONDS:
+                skipped.append((entry.name, "younger than 24h (--safe)"))
+                continue
             shutil.rmtree(entry)
             cleaned.append(entry.name)
             continue
@@ -589,8 +597,9 @@ def main() -> None:
     plan_mode = "-p" in args
     non_interactive = "-nit" in args
     force = "-f" in args or "--force" in args
+    safe = "--safe" in args
     env_mode = "-e" in args
-    args = [a for a in args if a not in ("-n", "-r", "-e", "-f", "--force", "-p", "-nit")]
+    args = [a for a in args if a not in ("-n", "-r", "-e", "-f", "--force", "-p", "-nit", "--safe")]
     extra_env = collect_luv_env() if env_mode else {}
 
     if not args or args[0] in ("-h", "--help"):
@@ -604,6 +613,7 @@ Flags:
   -nit          non-interactive: run claude -p <prompt> and exit (no REPL)
   -e            env: pass LUV_* environment variables (with prefix stripped) into the session
   -f, --force   (with --clean) skip safety checks and delete all work folders
+  --safe        (with --clean -f) only delete folders older than 24h
 
 Commands:
   luv --init                              configure default GitHub org
@@ -613,7 +623,7 @@ Commands:
   luv [org/]<repo> -pr <number> [prompt]  open a GitHub PR by repo + number
   luv [org/]<repo> -n                     open shell in latest local clone
   luv [org/]<repo> -r                     resume Claude in latest local clone
-  luv --clean [-f]                        delete fully-pushed work folders
+  luv --clean [-f] [--safe]               delete fully-pushed work folders
 
 Org resolution:
   Explicit org/repo overrides the default. Run 'luv --init' to set a default.
@@ -626,7 +636,7 @@ Docker:
         sys.exit(0)
 
     if args[0] == "--clean":
-        cmd_clean(force=force)
+        cmd_clean(force=force, safe=safe)
         return
 
     if args[0] == "--init":
