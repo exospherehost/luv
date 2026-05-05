@@ -635,6 +635,9 @@ Docker:
   "dev-environment" service. Torn down automatically on exit.""")
         sys.exit(0)
 
+    if safe and (args[0] != "--clean" or not force):
+        die("--safe only works with --clean -f")
+
     if args[0] == "--clean":
         cmd_clean(force=force, safe=safe)
         return
